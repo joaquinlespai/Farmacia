@@ -1,4 +1,2 @@
-link: pegar aqui el link publico de Github Codespaces
+link: https://glowing-palm-tree-9p75g64wj44h77wr-3000.app.github.dev/
 
-Ejemplo:
-link: https://nombre-del-codespace-3000.app.github.dev
