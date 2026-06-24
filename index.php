@@ -124,9 +124,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'regis
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $registerError = 'Ingresa un correo valido.';
     } elseif (strlen($password) < 6) {
-        $registerError = 'La contrasena debe tener al menos 6 caracteres.';
+        $registerError = 'La contraseña debe tener al menos 6 caracteres.';
     } elseif ($password !== $confirmPassword) {
-        $registerError = 'Las contrasenas no coinciden.';
+        $registerError = 'Las contraseñas no coinciden.';
     } else {
         $emailExists = $pdo->prepare('SELECT COUNT(*) FROM usuarios WHERE email = ?');
         $emailExists->execute([$email]);
@@ -171,7 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'login
         exit;
     }
 
-    $loginError = 'Correo o contrasena incorrectos.';
+    $loginError = 'Correo o contraseña incorrectos.';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'logout') {
@@ -734,7 +734,7 @@ if ($isAuthenticated) {
                             <label for="email">Correo</label>
                             <input id="email" name="email" type="email" required autocomplete="username" value="admin@infin.cl">
 
-                            <label for="password">Contrasena</label>
+                            <label for="password">Contraseña</label>
                             <input id="password" name="password" type="password" required autocomplete="current-password" placeholder="admin123">
 
                             <button type="submit">Entrar</button>
@@ -759,10 +759,10 @@ if ($isAuthenticated) {
                             <label for="email_registro">Correo</label>
                             <input id="email_registro" name="email_registro" type="email" required autocomplete="email">
 
-                            <label for="password_registro">Contrasena</label>
+                            <label for="password_registro">Contraseña</label>
                             <input id="password_registro" name="password_registro" type="password" minlength="6" required autocomplete="new-password">
 
-                            <label for="confirm_password">Confirmar contrasena</label>
+                            <label for="confirm_password">Confirmar contraseña</label>
                             <input id="confirm_password" name="confirm_password" type="password" minlength="6" required autocomplete="new-password">
 
                             <button type="submit">Crear cuenta</button>

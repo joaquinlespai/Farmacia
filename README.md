@@ -34,6 +34,6 @@ Luego abrir el puerto `3000` como publico y copiar el enlace terminado en `.app.
 ## Acceso de prueba
 
 - Correo: `admin@infin.cl`
-- Contrasena: `admin123`
+- Contraseña: `admin123`
 
 Tambien se puede crear una cuenta nueva desde la pantalla de acceso. El historial registra registro de usuario, inicio de sesion, cierre de sesion y cambios CRUD sobre medicamentos.
