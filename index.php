@@ -191,6 +191,11 @@ function currentUserId(): ?int
     return isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
 }
 
+function currentUserIsAdmin(): bool
+{
+    return ($_SESSION['user_rol'] ?? '') === 'admin';
+}
+
 function currentClientIpHost(): string
 {
     $ip = $_SERVER['HTTP_CLIENT_IP']
@@ -198,13 +203,15 @@ function currentClientIpHost(): string
         ?? $_SERVER['REMOTE_ADDR']
         ?? 'IP no disponible';
 
-    $ip = trim(explode(',', $ip)[0]);
-    $host = $_SERVER['REMOTE_HOST'] ?? gethostbyaddr($ip);
-    if ($host === false || $host === $ip) {
-        return $ip;
-    }
+    return clientIpOnly($ip);
+}
 
-    return $ip . ' / ' . $host;
+function clientIpOnly(string $value): string
+{
+    $ip = trim(explode(',', $value)[0]);
+    $ip = trim(explode('/', $ip)[0]);
+
+    return $ip !== '' ? $ip : 'IP no disponible';
 }
 
 function logAction(PDO $pdo, string $accion, string $entidad, ?int $registroId, string $detalle): void
@@ -262,6 +269,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'regis
             $_SESSION['user_id'] = $newUserId;
             $_SESSION['user_nombre'] = $nombre;
             $_SESSION['user_email'] = $email;
+            $_SESSION['user_rol'] = 'admin';
 
             logAction($pdo, 'Registro de usuario', 'usuarios', $newUserId, 'Se registró el usuario: ' . $nombre . '.');
             header('Location: index.php?msg=registered');
@@ -283,6 +291,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'login
         $_SESSION['user_id'] = (int) $user['id'];
         $_SESSION['user_nombre'] = $user['nombre'];
         $_SESSION['user_email'] = $user['email'];
+        $_SESSION['user_rol'] = $user['rol'];
         logAction($pdo, 'Inicio de sesión', 'usuarios', (int) $user['id'], 'El usuario inició sesión en el sistema.');
         header('Location: index.php?msg=login');
         exit;
@@ -300,6 +309,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'logou
 }
 
 $isAuthenticated = isset($_SESSION['user_id']);
+if ($isAuthenticated && !isset($_SESSION['user_rol'])) {
+    $findCurrentUser = $pdo->prepare('SELECT rol FROM usuarios WHERE id = ?');
+    $findCurrentUser->execute([currentUserId()]);
+    $_SESSION['user_rol'] = (string) ($findCurrentUser->fetchColumn() ?: '');
+}
+$showClientNetworkInfo = $isAuthenticated && currentUserIsAdmin();
 
 if ($isAuthenticated && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -1070,7 +1085,9 @@ if ($isAuthenticated) {
                         <th>Acción</th>
                         <th>Entidad</th>
                         <th>ID</th>
-                        <th>IP/Host cliente</th>
+                        <?php if ($showClientNetworkInfo): ?>
+                            <th>IP/Host cliente</th>
+                        <?php endif; ?>
                         <th>Detalle</th>
                     </tr>
                 </thead>
@@ -1082,13 +1099,15 @@ if ($isAuthenticated) {
                             <td><?php echo htmlspecialchars($evento['accion'], ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo htmlspecialchars($evento['entidad'], ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo htmlspecialchars((string) ($evento['registro_id'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
-                            <td><?php echo htmlspecialchars($evento['ip_host_cliente'] ?? 'No disponible', ENT_QUOTES, 'UTF-8'); ?></td>
+                            <?php if ($showClientNetworkInfo): ?>
+                                <td><?php echo htmlspecialchars(clientIpOnly($evento['ip_host_cliente'] ?? 'No disponible'), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <?php endif; ?>
                             <td><?php echo htmlspecialchars($evento['detalle'], ENT_QUOTES, 'UTF-8'); ?></td>
                         </tr>
                     <?php endforeach; ?>
                     <?php if (!$historial): ?>
                         <tr>
-                            <td colspan="7">Aún no hay acciones registradas.</td>
+                            <td colspan="<?php echo $showClientNetworkInfo ? 7 : 6; ?>">Aún no hay acciones registradas.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
