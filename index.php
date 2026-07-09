@@ -4,6 +4,9 @@ declare(strict_types=1);
 date_default_timezone_set('America/Santiago');
 session_start();
 
+const MIN_EXPIRATION_DATE = '2026-01-01';
+const MAX_MEDICINE_PRICE = 10000000;
+
 $dataDir = __DIR__ . '/data';
 $dbPath = $dataDir . '/farmacia.sqlite';
 $isNewDatabase = !file_exists($dbPath);
@@ -20,9 +23,9 @@ $pdo->exec("
         nombre TEXT NOT NULL,
         laboratorio TEXT NOT NULL,
         categoria TEXT NOT NULL,
-        precio REAL NOT NULL CHECK (precio >= 0),
+        precio REAL NOT NULL CHECK (precio >= 0 AND precio <= 10000000),
         stock INTEGER NOT NULL CHECK (stock >= 0),
-        fecha_vencimiento TEXT NOT NULL,
+        fecha_vencimiento TEXT NOT NULL CHECK (fecha_vencimiento >= '2026-01-01'),
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
 ");
@@ -49,6 +52,38 @@ $pdo->exec("
         FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
     )
 ");
+$pdo->exec("
+    CREATE TRIGGER IF NOT EXISTS medicamentos_precio_limite_insert
+    BEFORE INSERT ON medicamentos
+    WHEN NEW.precio < 0 OR NEW.precio > 10000000
+    BEGIN
+        SELECT RAISE(ABORT, 'El precio no puede superar los 10.000.000 de pesos.');
+    END
+");
+$pdo->exec("
+    CREATE TRIGGER IF NOT EXISTS medicamentos_precio_limite_update
+    BEFORE UPDATE ON medicamentos
+    WHEN NEW.precio < 0 OR NEW.precio > 10000000
+    BEGIN
+        SELECT RAISE(ABORT, 'El precio no puede superar los 10.000.000 de pesos.');
+    END
+");
+$pdo->exec("
+    CREATE TRIGGER IF NOT EXISTS medicamentos_fecha_vencimiento_insert
+    BEFORE INSERT ON medicamentos
+    WHEN NEW.fecha_vencimiento < '2026-01-01'
+    BEGIN
+        SELECT RAISE(ABORT, 'La fecha de vencimiento debe ser desde 2026.');
+    END
+");
+$pdo->exec("
+    CREATE TRIGGER IF NOT EXISTS medicamentos_fecha_vencimiento_update
+    BEFORE UPDATE ON medicamentos
+    WHEN NEW.fecha_vencimiento < '2026-01-01'
+    BEGIN
+        SELECT RAISE(ABORT, 'La fecha de vencimiento debe ser desde 2026.');
+    END
+");
 
 $userCount = (int) $pdo->query('SELECT COUNT(*) FROM usuarios')->fetchColumn();
 if ($userCount === 0) {
@@ -57,7 +92,7 @@ if ($userCount === 0) {
         VALUES (?, ?, ?, ?)
     ");
     $seedUser->execute(['Administrador', 'admin@infin.cl', password_hash('admin123', PASSWORD_DEFAULT), 'admin']);
-    $seedUser->execute(['Joaquin Lespai', 'joaquin@infin.cl', password_hash('123456', PASSWORD_DEFAULT), 'admin']);
+    $seedUser->execute(['Joaquín Lespai', 'joaquin@infin.cl', password_hash('123456', PASSWORD_DEFAULT), 'admin']);
 }
 
 if ($isNewDatabase) {
@@ -66,9 +101,9 @@ if ($isNewDatabase) {
         VALUES (?, ?, ?, ?, ?, ?)
     ");
 
-    $seed->execute(['Paracetamol 500 mg', 'Laboratorio Chile', 'Analgesico', 1990, 45, '2027-04-15']);
+    $seed->execute(['Paracetamol 500 mg', 'Laboratorio Chile', 'Analgésico', 1990, 45, '2027-04-15']);
     $seed->execute(['Ibuprofeno 400 mg', 'PharmaVida', 'Antiinflamatorio', 2490, 30, '2027-08-20']);
-    $seed->execute(['Loratadina 10 mg', 'MediSur', 'Antialergico', 3290, 22, '2028-01-10']);
+    $seed->execute(['Loratadina 10 mg', 'MediSur', 'Antialérgico', 3290, 22, '2028-01-10']);
 }
 
 function cleanText(string $value): string
@@ -122,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'regis
     if ($nombre === '') {
         $registerError = 'El nombre es obligatorio.';
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $registerError = 'Ingresa un correo valido.';
+        $registerError = 'Ingresa un correo válido.';
     } elseif (strlen($password) < 6) {
         $registerError = 'La contraseña debe tener al menos 6 caracteres.';
     } elseif ($password !== $confirmPassword) {
@@ -146,7 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'regis
             $_SESSION['user_nombre'] = $nombre;
             $_SESSION['user_email'] = $email;
 
-            logAction($pdo, 'Registro de usuario', 'usuarios', $newUserId, 'Se registro el usuario: ' . $nombre . '.');
+            logAction($pdo, 'Registro de usuario', 'usuarios', $newUserId, 'Se registró el usuario: ' . $nombre . '.');
             header('Location: index.php?msg=registered');
             exit;
         }
@@ -166,7 +201,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'login
         $_SESSION['user_id'] = (int) $user['id'];
         $_SESSION['user_nombre'] = $user['nombre'];
         $_SESSION['user_email'] = $user['email'];
-        logAction($pdo, 'Inicio de sesion', 'usuarios', (int) $user['id'], 'El usuario inicio sesion en el sistema.');
+        logAction($pdo, 'Inicio de sesión', 'usuarios', (int) $user['id'], 'El usuario inició sesión en el sistema.');
         header('Location: index.php?msg=login');
         exit;
     }
@@ -175,7 +210,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'login
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'logout') {
-    logAction($pdo, 'Cierre de sesion', 'usuarios', currentUserId(), 'El usuario cerro sesion en el sistema.');
+    logAction($pdo, 'Cierre de sesión', 'usuarios', currentUserId(), 'El usuario cerró sesión en el sistema.');
     $_SESSION = [];
     session_destroy();
     header('Location: index.php?msg=logout');
@@ -195,7 +230,7 @@ if ($isAuthenticated && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $deletedName = (string) ($findDeleted->fetchColumn() ?: 'Registro no encontrado');
             $delete = $pdo->prepare('DELETE FROM medicamentos WHERE id = ?');
             $delete->execute([$id]);
-            logAction($pdo, 'Eliminar', 'medicamentos', $id, 'Elimino el medicamento: ' . $deletedName . '.');
+            logAction($pdo, 'Eliminar', 'medicamentos', $id, 'Eliminó el medicamento: ' . $deletedName . '.');
             header('Location: index.php?msg=deleted');
             exit;
         }
@@ -217,16 +252,20 @@ if ($isAuthenticated && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'El laboratorio es obligatorio.';
         }
         if ($categoria === '') {
-            $errors[] = 'La categoria es obligatoria.';
+            $errors[] = 'La categoría es obligatoria.';
         }
         if ($precio < 0) {
             $errors[] = 'El precio debe ser mayor o igual a 0.';
+        } elseif ($precio > MAX_MEDICINE_PRICE) {
+            $errors[] = 'El precio no puede superar los 10.000.000 de pesos.';
         }
         if ($stock < 0) {
             $errors[] = 'El stock debe ser mayor o igual a 0.';
         }
         if ($fechaVencimiento === '') {
             $errors[] = 'La fecha de vencimiento es obligatoria.';
+        } elseif ($fechaVencimiento < MIN_EXPIRATION_DATE) {
+            $errors[] = 'La fecha de vencimiento debe ser desde el 1 de enero de 2026.';
         }
 
         if (!$errors) {
@@ -237,7 +276,7 @@ if ($isAuthenticated && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     WHERE id = ?
                 ");
                 $update->execute([$nombre, $laboratorio, $categoria, $precio, $stock, $fechaVencimiento, $id]);
-                logAction($pdo, 'Modificar', 'medicamentos', $id, 'Modifico el medicamento: ' . $nombre . '.');
+                logAction($pdo, 'Modificar', 'medicamentos', $id, 'Modificó el medicamento: ' . $nombre . '.');
                 header('Location: index.php?msg=updated');
                 exit;
             }
@@ -247,7 +286,7 @@ if ($isAuthenticated && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 VALUES (?, ?, ?, ?, ?, ?)
             ");
             $insert->execute([$nombre, $laboratorio, $categoria, $precio, $stock, $fechaVencimiento]);
-            logAction($pdo, 'Crear', 'medicamentos', (int) $pdo->lastInsertId(), 'Creo el medicamento: ' . $nombre . '.');
+            logAction($pdo, 'Crear', 'medicamentos', (int) $pdo->lastInsertId(), 'Creó el medicamento: ' . $nombre . '.');
             header('Location: index.php?msg=created');
             exit;
         }
@@ -258,8 +297,8 @@ $messages = [
     'created' => 'Medicamento creado correctamente.',
     'updated' => 'Medicamento modificado correctamente.',
     'deleted' => 'Medicamento eliminado correctamente.',
-    'login' => 'Sesion iniciada correctamente.',
-    'logout' => 'Sesion cerrada correctamente.',
+    'login' => 'Sesión iniciada correctamente.',
+    'logout' => 'Sesión cerrada correctamente.',
     'registered' => 'Usuario registrado correctamente.',
 ];
 $message = $messages[$_GET['msg'] ?? ''] ?? '';
@@ -691,7 +730,7 @@ if ($isAuthenticated) {
         </div>
         <div class="top-actions">
             <?php if ($isAuthenticated): ?>
-                <nav aria-label="Menu principal">
+                <nav aria-label="Menú principal">
                     <a href="#inicio">Inicio</a>
                     <a href="#crud">CRUD</a>
                     <a href="#mockup">Mockup</a>
@@ -702,7 +741,7 @@ if ($isAuthenticated) {
                 <span class="session-name"><?php echo htmlspecialchars(currentUserName(), ENT_QUOTES, 'UTF-8'); ?></span>
                 <form class="logout-form" method="post">
                     <input type="hidden" name="action" value="logout">
-                    <button type="submit">Cerrar sesion</button>
+                    <button type="submit">Cerrar sesión</button>
                 </form>
             <?php else: ?>
                 <span class="session-name">Acceso protegido</span>
@@ -722,7 +761,7 @@ if ($isAuthenticated) {
 
                 <div class="auth-grid">
                     <div class="auth-panel">
-                        <h2>Iniciar sesion</h2>
+                        <h2>Iniciar sesión</h2>
 
                         <?php if ($loginError): ?>
                             <div class="errors"><?php echo htmlspecialchars($loginError, ENT_QUOTES, 'UTF-8'); ?></div>
@@ -773,40 +812,40 @@ if ($isAuthenticated) {
         <?php else: ?>
         <section class="hero" id="inicio">
             <div>
-                <h1>Sistema de gestion de medicamentos</h1>
+                <h1>Sistema de gestión de medicamentos</h1>
                 <p>
-                    In-Fin Pharmacy es una aplicacion web para administrar el inventario de medicamentos de una farmacia.
+                    In-Fin Pharmacy es una aplicación web para administrar el inventario de medicamentos de una farmacia.
                     El sistema permite registrar productos, revisar existencias, actualizar datos comerciales y eliminar
-                    registros que ya no correspondan al catalogo activo.
+                    registros que ya no correspondan al catálogo activo.
                 </p>
                 <p>
-                    La aplicacion esta construida con PHP y SQLite. La base de datos se crea automaticamente dentro del
-                    proyecto al abrir la pagina en Github Codespaces. El acceso queda protegido con login y cada cambio
-                    importante queda registrado en un historial de auditoria.
+                    La aplicación está construida con PHP y SQLite. La base de datos se crea automáticamente dentro del
+                    proyecto al abrir la página en GitHub Codespaces. El acceso queda protegido con inicio de sesión y cada cambio
+                    importante queda registrado en un historial de auditoría.
                 </p>
                 <h2>Integrantes</h2>
                 <ul>
                     <li>Tomás Teihuel</li>
-                    <li>Gerardo Ceron</li>
-                    <li>Joaquin Lespai</li>
+                    <li>Gerardo Cerón</li>
+                    <li>Joaquín Lespai</li>
                 </ul>
                 <div class="pill-row">
                     <span class="pill">PHP</span>
                     <span class="pill">SQLite</span>
                     <span class="pill">CRUD</span>
-                    <span class="pill">Github Codespaces</span>
+                    <span class="pill">GitHub Codespaces</span>
                 </div>
             </div>
             <img class="mockup" src="mockup.png" alt="Mockup de la interfaz principal de In-Fin Pharmacy">
         </section>
 
         <section id="crud">
-            <h2>Descripcion de operaciones CRUD</h2>
+            <h2>Descripción de operaciones CRUD</h2>
             <div class="grid">
                 <div class="crud-item">
                     <strong>Crear</strong>
-                    Registrar un medicamento nuevo con nombre, laboratorio, categoria, precio, stock y fecha de vencimiento.
-                    El historial guarda quien lo creo y cuando.
+                    Registrar un medicamento nuevo con nombre, laboratorio, categoría, precio, stock y fecha de vencimiento.
+                    El historial guarda quién lo creó y cuándo.
                 </div>
                 <div class="crud-item">
                     <strong>Leer</strong>
@@ -815,11 +854,11 @@ if ($isAuthenticated) {
                 <div class="crud-item">
                     <strong>Modificar</strong>
                     Cargar los datos de un medicamento existente en el formulario y guardar sus cambios.
-                    La accion queda asociada al usuario activo.
+                    La acción queda asociada al usuario activo.
                 </div>
                 <div class="crud-item">
                     <strong>Eliminar</strong>
-                    Borrar un medicamento del inventario cuando ya no forma parte del catalogo.
+                    Borrar un medicamento del inventario cuando ya no forma parte del catálogo.
                     El sistema registra el nombre del registro eliminado.
                 </div>
             </div>
@@ -828,7 +867,7 @@ if ($isAuthenticated) {
         <section id="mockup">
             <h2>Mockup de interfaz principal</h2>
             <p>
-                Esta imagen representa la pantalla esperada para el modulo principal de gestion de medicamentos.
+                Esta imagen representa la pantalla esperada para el módulo principal de gestión de medicamentos.
             </p>
             <img class="mockup" src="mockup.png" alt="Mockup del CRUD de medicamentos">
         </section>
@@ -838,7 +877,7 @@ if ($isAuthenticated) {
             <p>
                 La base de datos seleccionada es SQLite. Se utilizan las tablas <strong>medicamentos</strong>,
                 <strong>usuarios</strong> e <strong>historial</strong>, definidas en el archivo <strong>schema.sql</strong>.
-                Cuando la pagina se ejecuta por primera vez, PHP crea el archivo <strong>data/farmacia.sqlite</strong>,
+                Cuando la página se ejecuta por primera vez, PHP crea el archivo <strong>data/farmacia.sqlite</strong>,
                 agrega registros iniciales y deja usuarios de prueba para acceder al sistema.
             </p>
         </section>
@@ -873,17 +912,17 @@ if ($isAuthenticated) {
                     <label for="laboratorio">Laboratorio</label>
                     <input id="laboratorio" name="laboratorio" required value="<?php echo htmlspecialchars((string) ($editing['laboratorio'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
 
-                    <label for="categoria">Categoria</label>
+                    <label for="categoria">Categoría</label>
                     <input id="categoria" name="categoria" required value="<?php echo htmlspecialchars((string) ($editing['categoria'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
 
                     <label for="precio">Precio</label>
-                    <input id="precio" name="precio" type="number" min="0" step="1" required value="<?php echo htmlspecialchars((string) ($editing['precio'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                    <input id="precio" name="precio" type="number" min="0" max="<?php echo MAX_MEDICINE_PRICE; ?>" step="1" required value="<?php echo htmlspecialchars((string) ($editing['precio'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
 
                     <label for="stock">Stock</label>
                     <input id="stock" name="stock" type="number" min="0" step="1" required value="<?php echo htmlspecialchars((string) ($editing['stock'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
 
                     <label for="fecha_vencimiento">Fecha de vencimiento</label>
-                    <input id="fecha_vencimiento" name="fecha_vencimiento" type="date" required value="<?php echo htmlspecialchars((string) ($editing['fecha_vencimiento'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                    <input id="fecha_vencimiento" name="fecha_vencimiento" type="date" min="<?php echo MIN_EXPIRATION_DATE; ?>" required value="<?php echo htmlspecialchars((string) ($editing['fecha_vencimiento'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
 
                     <div class="actions">
                         <button type="submit"><?php echo $editing ? 'Guardar cambios' : 'Crear medicamento'; ?></button>
@@ -901,7 +940,7 @@ if ($isAuthenticated) {
                                 <th>ID</th>
                                 <th>Nombre</th>
                                 <th>Laboratorio</th>
-                                <th>Categoria</th>
+                                <th>Categoría</th>
                                 <th>Precio</th>
                                 <th>Stock</th>
                                 <th>Vence</th>
@@ -921,7 +960,7 @@ if ($isAuthenticated) {
                                     <td>
                                         <div class="actions">
                                             <a class="button" href="index.php?edit=<?php echo (int) $medicamento['id']; ?>#medicamentos">Editar</a>
-                                            <form class="inline-form" method="post" onsubmit="return confirm('Desea eliminar este medicamento?');">
+                                            <form class="inline-form" method="post" onsubmit="return confirm('¿Deseas eliminar este medicamento?');">
                                                 <input type="hidden" name="action" value="delete">
                                                 <input type="hidden" name="id" value="<?php echo (int) $medicamento['id']; ?>">
                                                 <button class="danger" type="submit">Eliminar</button>
@@ -938,13 +977,13 @@ if ($isAuthenticated) {
 
         <section id="historial">
             <h2>Historial de cambios</h2>
-            <p>Registro de quien hizo cada accion, cuando la hizo y sobre que registro del sistema.</p>
+            <p>Registro de quién hizo cada acción, cuándo la hizo y sobre qué registro del sistema.</p>
             <table class="audit-table">
                 <thead>
                     <tr>
                         <th>Fecha y hora</th>
                         <th>Usuario</th>
-                        <th>Accion</th>
+                        <th>Acción</th>
                         <th>Entidad</th>
                         <th>ID</th>
                         <th>Detalle</th>
@@ -963,7 +1002,7 @@ if ($isAuthenticated) {
                     <?php endforeach; ?>
                     <?php if (!$historial): ?>
                         <tr>
-                            <td colspan="6">Aun no hay acciones registradas.</td>
+                            <td colspan="6">Aún no hay acciones registradas.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -973,7 +1012,7 @@ if ($isAuthenticated) {
     </main>
 
     <footer>
-        <p>&copy; 2026 In-Fin Pharmacy. Proyecto academico CRUD con PHP y SQLite.</p>
+        <p>&copy; 2026 In-Fin Pharmacy. Proyecto académico CRUD con PHP y SQLite.</p>
     </footer>
 </body>
 </html>
