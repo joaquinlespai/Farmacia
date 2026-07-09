@@ -53,14 +53,14 @@ END;
 
 CREATE TRIGGER IF NOT EXISTS medicamentos_fecha_vencimiento_insert
 BEFORE INSERT ON medicamentos
-WHEN NEW.fecha_vencimiento < '2026-01-01'
+WHEN NEW.fecha_vencimiento < '2026-01-01' OR NEW.fecha_vencimiento > date('now', '+2 years')
 BEGIN
-    SELECT RAISE(ABORT, 'La fecha de vencimiento debe ser desde 2026.');
+    SELECT RAISE(ABORT, 'La fecha de vencimiento debe estar entre 2026 y máximo 2 años desde hoy.');
 END;
 
 CREATE TRIGGER IF NOT EXISTS medicamentos_fecha_vencimiento_update
 BEFORE UPDATE ON medicamentos
-WHEN NEW.fecha_vencimiento < '2026-01-01'
+WHEN NEW.fecha_vencimiento < '2026-01-01' OR NEW.fecha_vencimiento > date('now', '+2 years')
 BEGIN
-    SELECT RAISE(ABORT, 'La fecha de vencimiento debe ser desde 2026.');
+    SELECT RAISE(ABORT, 'La fecha de vencimiento debe estar entre 2026 y máximo 2 años desde hoy.');
 END;

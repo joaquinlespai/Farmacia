@@ -68,20 +68,22 @@ $pdo->exec("
         SELECT RAISE(ABORT, 'El precio no puede superar los 10.000.000 de pesos.');
     END
 ");
+$pdo->exec("DROP TRIGGER IF EXISTS medicamentos_fecha_vencimiento_insert");
+$pdo->exec("DROP TRIGGER IF EXISTS medicamentos_fecha_vencimiento_update");
 $pdo->exec("
     CREATE TRIGGER IF NOT EXISTS medicamentos_fecha_vencimiento_insert
     BEFORE INSERT ON medicamentos
-    WHEN NEW.fecha_vencimiento < '2026-01-01'
+    WHEN NEW.fecha_vencimiento < '2026-01-01' OR NEW.fecha_vencimiento > date('now', '+2 years')
     BEGIN
-        SELECT RAISE(ABORT, 'La fecha de vencimiento debe ser desde 2026.');
+        SELECT RAISE(ABORT, 'La fecha de vencimiento debe estar entre 2026 y máximo 2 años desde hoy.');
     END
 ");
 $pdo->exec("
     CREATE TRIGGER IF NOT EXISTS medicamentos_fecha_vencimiento_update
     BEFORE UPDATE ON medicamentos
-    WHEN NEW.fecha_vencimiento < '2026-01-01'
+    WHEN NEW.fecha_vencimiento < '2026-01-01' OR NEW.fecha_vencimiento > date('now', '+2 years')
     BEGIN
-        SELECT RAISE(ABORT, 'La fecha de vencimiento debe ser desde 2026.');
+        SELECT RAISE(ABORT, 'La fecha de vencimiento debe estar entre 2026 y máximo 2 años desde hoy.');
     END
 ");
 
@@ -114,6 +116,11 @@ function cleanText(string $value): string
 function money(float $value): string
 {
     return '$' . number_format($value, 0, ',', '.');
+}
+
+function maxExpirationDate(): string
+{
+    return date('Y-m-d', strtotime('+2 years'));
 }
 
 function currentUserName(): string
@@ -266,6 +273,8 @@ if ($isAuthenticated && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'La fecha de vencimiento es obligatoria.';
         } elseif ($fechaVencimiento < MIN_EXPIRATION_DATE) {
             $errors[] = 'La fecha de vencimiento debe ser desde el 1 de enero de 2026.';
+        } elseif ($fechaVencimiento > maxExpirationDate()) {
+            $errors[] = 'La fecha de vencimiento no puede superar los 2 años desde hoy.';
         }
 
         if (!$errors) {
@@ -922,7 +931,7 @@ if ($isAuthenticated) {
                     <input id="stock" name="stock" type="number" min="0" step="1" required value="<?php echo htmlspecialchars((string) ($editing['stock'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
 
                     <label for="fecha_vencimiento">Fecha de vencimiento</label>
-                    <input id="fecha_vencimiento" name="fecha_vencimiento" type="date" min="<?php echo MIN_EXPIRATION_DATE; ?>" required value="<?php echo htmlspecialchars((string) ($editing['fecha_vencimiento'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                    <input id="fecha_vencimiento" name="fecha_vencimiento" type="date" min="<?php echo MIN_EXPIRATION_DATE; ?>" max="<?php echo maxExpirationDate(); ?>" required value="<?php echo htmlspecialchars((string) ($editing['fecha_vencimiento'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
 
                     <div class="actions">
                         <button type="submit"><?php echo $editing ? 'Guardar cambios' : 'Crear medicamento'; ?></button>
