@@ -176,6 +176,12 @@ function formatDateMx(string $value): string
     return $date ? $date->format('d-m-Y') : $value;
 }
 
+function formatDateTimeMx(string $value): string
+{
+    $date = DateTime::createFromFormat('Y-m-d H:i:s', $value);
+    return $date ? $date->format('d-m-Y H:i:s') : $value;
+}
+
 function maxExpirationDate(): string
 {
     return date('Y-m-d', strtotime('+2 years'));
@@ -1094,7 +1100,7 @@ if ($isAuthenticated) {
                 <tbody>
                     <?php foreach ($historial as $evento): ?>
                         <tr>
-                            <td><?php echo htmlspecialchars($evento['created_at'], ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td><?php echo htmlspecialchars(formatDateTimeMx($evento['created_at']), ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo htmlspecialchars($evento['usuario_nombre'], ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo htmlspecialchars($evento['accion'], ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo htmlspecialchars($evento['entidad'], ENT_QUOTES, 'UTF-8'); ?></td>
