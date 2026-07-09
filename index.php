@@ -48,10 +48,22 @@ $pdo->exec("
         entidad TEXT NOT NULL,
         registro_id INTEGER,
         detalle TEXT NOT NULL,
+        ip_host_cliente TEXT NOT NULL DEFAULT 'No disponible',
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
     )
 ");
+$historialColumns = $pdo->query("PRAGMA table_info(historial)")->fetchAll(PDO::FETCH_ASSOC);
+$hasIpHostCliente = false;
+foreach ($historialColumns as $column) {
+    if (($column['name'] ?? '') === 'ip_host_cliente') {
+        $hasIpHostCliente = true;
+        break;
+    }
+}
+if (!$hasIpHostCliente) {
+    $pdo->exec("ALTER TABLE historial ADD COLUMN ip_host_cliente TEXT NOT NULL DEFAULT 'No disponible'");
+}
 $pdo->exec("
     CREATE TRIGGER IF NOT EXISTS medicamentos_precio_limite_insert
     BEFORE INSERT ON medicamentos
@@ -179,11 +191,27 @@ function currentUserId(): ?int
     return isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
 }
 
+function currentClientIpHost(): string
+{
+    $ip = $_SERVER['HTTP_CLIENT_IP']
+        ?? $_SERVER['HTTP_X_FORWARDED_FOR']
+        ?? $_SERVER['REMOTE_ADDR']
+        ?? 'IP no disponible';
+
+    $ip = trim(explode(',', $ip)[0]);
+    $host = $_SERVER['REMOTE_HOST'] ?? gethostbyaddr($ip);
+    if ($host === false || $host === $ip) {
+        return $ip;
+    }
+
+    return $ip . ' / ' . $host;
+}
+
 function logAction(PDO $pdo, string $accion, string $entidad, ?int $registroId, string $detalle): void
 {
     $log = $pdo->prepare("
-        INSERT INTO historial (usuario_id, usuario_nombre, accion, entidad, registro_id, detalle, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO historial (usuario_id, usuario_nombre, accion, entidad, registro_id, detalle, ip_host_cliente, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ");
     $log->execute([
         currentUserId(),
@@ -192,6 +220,7 @@ function logAction(PDO $pdo, string $accion, string $entidad, ?int $registroId, 
         $entidad,
         $registroId,
         $detalle,
+        currentClientIpHost(),
         date('Y-m-d H:i:s'),
     ]);
 }
@@ -1041,6 +1070,7 @@ if ($isAuthenticated) {
                         <th>Acción</th>
                         <th>Entidad</th>
                         <th>ID</th>
+                        <th>IP/Host cliente</th>
                         <th>Detalle</th>
                     </tr>
                 </thead>
@@ -1052,12 +1082,13 @@ if ($isAuthenticated) {
                             <td><?php echo htmlspecialchars($evento['accion'], ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo htmlspecialchars($evento['entidad'], ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo htmlspecialchars((string) ($evento['registro_id'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
+                            <td><?php echo htmlspecialchars($evento['ip_host_cliente'] ?? 'No disponible', ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo htmlspecialchars($evento['detalle'], ENT_QUOTES, 'UTF-8'); ?></td>
                         </tr>
                     <?php endforeach; ?>
                     <?php if (!$historial): ?>
                         <tr>
-                            <td colspan="6">Aún no hay acciones registradas.</td>
+                            <td colspan="7">Aún no hay acciones registradas.</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>

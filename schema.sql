@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS historial (
     entidad TEXT NOT NULL,
     registro_id INTEGER,
     detalle TEXT NOT NULL,
+    ip_host_cliente TEXT NOT NULL DEFAULT 'No disponible',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
 );
