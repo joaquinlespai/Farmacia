@@ -110,12 +110,58 @@ if ($isNewDatabase) {
 
 function cleanText(string $value): string
 {
-    return trim($value);
+    return trim((string) preg_replace('/\s+/', ' ', $value));
+}
+
+function fixCommonSpelling(string $value): string
+{
+    $corrections = [
+        '/\bparacetamol\b/iu' => 'Paracetamol',
+        '/\bparasetamol\b/iu' => 'Paracetamol',
+        '/\bparacetmol\b/iu' => 'Paracetamol',
+        '/\bparacethamol\b/iu' => 'Paracetamol',
+        '/\bibuprofeno\b/iu' => 'Ibuprofeno',
+        '/\biboprufeno\b/iu' => 'Ibuprofeno',
+        '/\bibruprofeno\b/iu' => 'Ibuprofeno',
+        '/\bloratadina\b/iu' => 'Loratadina',
+        '/\bloratadima\b/iu' => 'Loratadina',
+        '/\bloratadyna\b/iu' => 'Loratadina',
+        '/\bamoxicilina\b/iu' => 'Amoxicilina',
+        '/\bamoxilina\b/iu' => 'Amoxicilina',
+        '/\bamoxicilna\b/iu' => 'Amoxicilina',
+        '/\bomeprazol\b/iu' => 'Omeprazol',
+        '/\bomeprasol\b/iu' => 'Omeprazol',
+        '/\baspirina\b/iu' => 'Aspirina',
+        '/\baspirna\b/iu' => 'Aspirina',
+        '/\bcetirizina\b/iu' => 'Cetirizina',
+        '/\bcetirisina\b/iu' => 'Cetirizina',
+        '/\bmetformina\b/iu' => 'Metformina',
+        '/\bmetformia\b/iu' => 'Metformina',
+        '/\blosartan\b/iu' => 'Losartán',
+        '/\banalgesico\b/iu' => 'Analgésico',
+        '/\banalgesiko\b/iu' => 'Analgésico',
+        '/\bantialergico\b/iu' => 'Antialérgico',
+        '/\banti alergico\b/iu' => 'Antialérgico',
+        '/\bantibiotico\b/iu' => 'Antibiótico',
+        '/\bantiinflamatorio\b/iu' => 'Antiinflamatorio',
+        '/\bantihistaminico\b/iu' => 'Antihistamínico',
+        '/\blaboratorio chile\b/iu' => 'Laboratorio Chile',
+        '/\bmedisur\b/iu' => 'MediSur',
+        '/\bpharmavida\b/iu' => 'PharmaVida',
+    ];
+
+    return preg_replace(array_keys($corrections), array_values($corrections), $value);
 }
 
 function money(float $value): string
 {
     return '$' . number_format($value, 0, ',', '.');
+}
+
+function formatDateMx(string $value): string
+{
+    $date = DateTime::createFromFormat('Y-m-d', $value);
+    return $date ? $date->format('d-m-Y') : $value;
 }
 
 function maxExpirationDate(): string
@@ -245,9 +291,9 @@ if ($isAuthenticated && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'save') {
         $id = (int) ($_POST['id'] ?? 0);
-        $nombre = cleanText($_POST['nombre'] ?? '');
-        $laboratorio = cleanText($_POST['laboratorio'] ?? '');
-        $categoria = cleanText($_POST['categoria'] ?? '');
+        $nombre = fixCommonSpelling(cleanText($_POST['nombre'] ?? ''));
+        $laboratorio = fixCommonSpelling(cleanText($_POST['laboratorio'] ?? ''));
+        $categoria = fixCommonSpelling(cleanText($_POST['categoria'] ?? ''));
         $precio = (float) ($_POST['precio'] ?? -1);
         $stock = (int) ($_POST['stock'] ?? -1);
         $fechaVencimiento = cleanText($_POST['fecha_vencimiento'] ?? '');
@@ -925,7 +971,7 @@ if ($isAuthenticated) {
                     <input id="categoria" name="categoria" required value="<?php echo htmlspecialchars((string) ($editing['categoria'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
 
                     <label for="precio">Precio</label>
-                    <input id="precio" name="precio" type="number" min="0" max="<?php echo MAX_MEDICINE_PRICE; ?>" step="1" required value="<?php echo htmlspecialchars((string) ($editing['precio'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
+                    <input id="precio" name="precio" type="number" min="0" max="<?php echo MAX_MEDICINE_PRICE; ?>" step="1" required data-max-message="El precio no puede superar los 10.000.000 de pesos." value="<?php echo htmlspecialchars((string) ($editing['precio'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
 
                     <label for="stock">Stock</label>
                     <input id="stock" name="stock" type="number" min="0" step="1" required value="<?php echo htmlspecialchars((string) ($editing['stock'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>">
@@ -965,7 +1011,7 @@ if ($isAuthenticated) {
                                     <td><?php echo htmlspecialchars($medicamento['categoria'], ENT_QUOTES, 'UTF-8'); ?></td>
                                     <td><?php echo money((float) $medicamento['precio']); ?></td>
                                     <td><?php echo (int) $medicamento['stock']; ?></td>
-                                    <td><?php echo htmlspecialchars($medicamento['fecha_vencimiento'], ENT_QUOTES, 'UTF-8'); ?></td>
+                                    <td><?php echo htmlspecialchars(formatDateMx($medicamento['fecha_vencimiento']), ENT_QUOTES, 'UTF-8'); ?></td>
                                     <td>
                                         <div class="actions">
                                             <a class="button" href="index.php?edit=<?php echo (int) $medicamento['id']; ?>#medicamentos">Editar</a>
@@ -1023,5 +1069,65 @@ if ($isAuthenticated) {
     <footer>
         <p>&copy; 2026 In-Fin Pharmacy. Proyecto académico CRUD con PHP y SQLite.</p>
     </footer>
+    <script>
+        const spellingCorrections = [
+            [/\bparacetamol\b/gi, 'Paracetamol'],
+            [/\bparasetamol\b/gi, 'Paracetamol'],
+            [/\bparacetmol\b/gi, 'Paracetamol'],
+            [/\bparacethamol\b/gi, 'Paracetamol'],
+            [/\bibuprofeno\b/gi, 'Ibuprofeno'],
+            [/\biboprufeno\b/gi, 'Ibuprofeno'],
+            [/\bibruprofeno\b/gi, 'Ibuprofeno'],
+            [/\bloratadina\b/gi, 'Loratadina'],
+            [/\bloratadima\b/gi, 'Loratadina'],
+            [/\bloratadyna\b/gi, 'Loratadina'],
+            [/\bamoxicilina\b/gi, 'Amoxicilina'],
+            [/\bamoxilina\b/gi, 'Amoxicilina'],
+            [/\bamoxicilna\b/gi, 'Amoxicilina'],
+            [/\bomeprazol\b/gi, 'Omeprazol'],
+            [/\bomeprasol\b/gi, 'Omeprazol'],
+            [/\baspirina\b/gi, 'Aspirina'],
+            [/\baspirna\b/gi, 'Aspirina'],
+            [/\bcetirizina\b/gi, 'Cetirizina'],
+            [/\bcetirisina\b/gi, 'Cetirizina'],
+            [/\bmetformina\b/gi, 'Metformina'],
+            [/\bmetformia\b/gi, 'Metformina'],
+            [/\blosartan\b/gi, 'Losartán'],
+            [/\banalgesico\b/gi, 'Analgésico'],
+            [/\banalgesiko\b/gi, 'Analgésico'],
+            [/\bantialergico\b/gi, 'Antialérgico'],
+            [/\banti alergico\b/gi, 'Antialérgico'],
+            [/\bantibiotico\b/gi, 'Antibiótico'],
+            [/\bantihistaminico\b/gi, 'Antihistamínico'],
+            [/\blaboratorio chile\b/gi, 'Laboratorio Chile'],
+            [/\bmedisur\b/gi, 'MediSur'],
+            [/\bpharmavida\b/gi, 'PharmaVida'],
+        ];
+
+        function fixSpelling(value) {
+            return spellingCorrections.reduce((text, correction) => text.replace(correction[0], correction[1]), value.replace(/\s+/g, ' ').trim());
+        }
+
+        ['nombre', 'laboratorio', 'categoria'].forEach((id) => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.addEventListener('blur', () => {
+                    input.value = fixSpelling(input.value);
+                });
+            }
+        });
+
+        const priceInput = document.getElementById('precio');
+        if (priceInput) {
+            const validatePrice = () => {
+                const max = Number(priceInput.max);
+                const value = Number(priceInput.value);
+                priceInput.setCustomValidity(priceInput.value !== '' && value > max ? priceInput.dataset.maxMessage : '');
+            };
+
+            priceInput.addEventListener('input', validatePrice);
+            priceInput.addEventListener('invalid', validatePrice);
+        }
+    </script>
 </body>
 </html>
