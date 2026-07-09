@@ -199,7 +199,7 @@ function currentUserId(): ?int
 
 function currentUserIsAdmin(): bool
 {
-    return ($_SESSION['user_rol'] ?? '') === 'admin';
+    return strtolower((string) ($_SESSION['user_email'] ?? '')) === 'admin@infin.cl';
 }
 
 function currentClientIpHost(): string
@@ -209,7 +209,13 @@ function currentClientIpHost(): string
         ?? $_SERVER['REMOTE_ADDR']
         ?? 'IP no disponible';
 
-    return clientIpOnly($ip);
+    $ip = clientIpOnly($ip);
+    $host = $_SERVER['REMOTE_HOST'] ?? gethostbyaddr($ip);
+    if ($host === false || $host === $ip) {
+        return $ip;
+    }
+
+    return $ip . ' / ' . $host;
 }
 
 function clientIpOnly(string $value): string
@@ -315,10 +321,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'logou
 }
 
 $isAuthenticated = isset($_SESSION['user_id']);
-if ($isAuthenticated && !isset($_SESSION['user_rol'])) {
-    $findCurrentUser = $pdo->prepare('SELECT rol FROM usuarios WHERE id = ?');
+if ($isAuthenticated && (!isset($_SESSION['user_email']) || !isset($_SESSION['user_rol']))) {
+    $findCurrentUser = $pdo->prepare('SELECT email, rol FROM usuarios WHERE id = ?');
     $findCurrentUser->execute([currentUserId()]);
-    $_SESSION['user_rol'] = (string) ($findCurrentUser->fetchColumn() ?: '');
+    $currentUser = $findCurrentUser->fetch(PDO::FETCH_ASSOC) ?: [];
+    $_SESSION['user_email'] = $_SESSION['user_email'] ?? (string) ($currentUser['email'] ?? '');
+    $_SESSION['user_rol'] = $_SESSION['user_rol'] ?? (string) ($currentUser['rol'] ?? '');
 }
 $showClientNetworkInfo = $isAuthenticated && currentUserIsAdmin();
 
@@ -1106,7 +1114,7 @@ if ($isAuthenticated) {
                             <td><?php echo htmlspecialchars($evento['entidad'], ENT_QUOTES, 'UTF-8'); ?></td>
                             <td><?php echo htmlspecialchars((string) ($evento['registro_id'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></td>
                             <?php if ($showClientNetworkInfo): ?>
-                                <td><?php echo htmlspecialchars(clientIpOnly($evento['ip_host_cliente'] ?? 'No disponible'), ENT_QUOTES, 'UTF-8'); ?></td>
+                                <td><?php echo htmlspecialchars($evento['ip_host_cliente'] ?? 'No disponible', ENT_QUOTES, 'UTF-8'); ?></td>
                             <?php endif; ?>
                             <td><?php echo htmlspecialchars($evento['detalle'], ENT_QUOTES, 'UTF-8'); ?></td>
                         </tr>
